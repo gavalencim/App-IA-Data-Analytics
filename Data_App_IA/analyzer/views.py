@@ -80,7 +80,6 @@ def home(request):
         CURRENT_DATAFRAME = df
 
         # Limitar columnas
-        selected_columns = selected_columns[:10]
 
         filtered_df = df[selected_columns]
 

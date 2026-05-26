@@ -2,12 +2,31 @@ import os
 import uuid
 import matplotlib
 matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
 from django.conf import settings
+from matplotlib.ticker import FuncFormatter
+
+
+# ==========================================
+# SEABORN STYLE
+# ==========================================
+
+sns.set_theme(
+    style="whitegrid",
+    palette="deep"
+)
 
 
 class ChartService:
 
+
+    # ==========================================
+    # SAVE CHART
+    # ==========================================
 
     @staticmethod
     def save_chart():
@@ -30,141 +49,405 @@ class ChartService:
         )
 
         plt.tight_layout()
-        plt.savefig(full_path)
+
+        plt.savefig(
+            full_path,
+            dpi=300,
+            bbox_inches='tight'
+        )
+
         plt.close()
 
         return f"/media/{relative_path.replace('\\', '/')}"
 
 
-    @staticmethod
-    def generate_histogram(df, column):
+    # ==========================================
+    # FORMAT THOUSANDS
+    # ==========================================
 
-        plt.figure(figsize=(8,5))
-        ax = df[column].dropna().hist(bins=20)
-        df[column].hist()
-        plt.title(f"Distribución de {column}", fontweihgt='bold')
+    @staticmethod
+    def thousands_formatter():
+
+        return FuncFormatter(
+            lambda x, _: f"{x:,.0f}"
+        )
+
+
+    # ==========================================
+    # HISTOGRAM
+    # ==========================================
+
+    @staticmethod
+    def generate_histogram(
+        df,
+        column,
+        title=None
+    ):
+
+        plt.figure(figsize=(10, 6))
+
+        ax = sns.histplot(
+            data=df,
+            x=column,
+            bins=20,
+            kde=True
+        )
+
+        plt.title(
+            title or f"Distribución de {column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
         plt.xlabel(column)
         plt.ylabel("Frecuencia")
 
         ax.xaxis.set_major_formatter(
-            plt.FuncFormatter(
-                lambda x, _: f"{x:,.0f}"
-            )
+            ChartService.thousands_formatter()
         )
 
         ax.yaxis.set_major_formatter(
-            plt.FuncFormatter(
-                lambda y, _: f"{y:,.0f}"
-            )
+            ChartService.thousands_formatter()
         )
 
         return ChartService.save_chart()
 
 
-    @staticmethod
-    def generate_bar_chart(df, column):
+    # ==========================================
+    # COUNTPLOT
+    # ==========================================
 
-        value_counts = (
+    @staticmethod
+    def generate_countplot(
+        df,
+        column,
+        title=None
+    ):
+
+        top_values = (
             df[column]
             .astype(str)
             .value_counts()
             .head(10)
+            .index
         )
 
-        plt.figure(figsize=(9,5))
-        value_counts.plot(kind='bar')
-        ax = value_counts.plot(kind='bar')
-        plt.title(f"Frecuencia de {column}", fontweight="bold")
+        filtered_df = (
+            df[df[column].astype(str).isin(top_values)]
+        )
+
+        plt.figure(figsize=(11, 6))
+
+        ax = sns.countplot(
+            data=filtered_df,
+            x=column,
+            order=top_values
+        )
+
+        plt.title(
+            title or f"Frecuencia de {column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        plt.xlabel(column)
         plt.ylabel("Cantidad")
-        plt.xticks(rotation=45, ha="right")
-        plt.grid(axis='y',alpha=0.3)
 
-        for i, value in enumerate(value_counts):
-
-            ax.text(
-                i,
-                value + 0.5,
-                f"{value:,}",
-                ha='center',
-                fontsize=10
-            )
+        plt.xticks(
+            rotation=45,
+            ha="right"
+        )
 
         ax.yaxis.set_major_formatter(
-            plt.FuncFormatter(
-                lambda y, _: f"{y:,.0f}"
-            )
+            ChartService.thousands_formatter()
         )
 
+        for container in ax.containers:
+
+            ax.bar_label(
+                container,
+                fmt='%.0f',
+                padding=3
+            )
+
         return ChartService.save_chart()
-    
+
+
+    # ==========================================
+    # BARPLOT
+    # ==========================================
+
     @staticmethod
-    def generate_aggregation_bar_chart(
+    def generate_barplot(
         df,
         x_column,
         y_column,
-        aggregation="mean"):
+        aggregation="mean",
+        title=None
+    ):
 
-        if aggregation == "mean":
-
-            grouped = (
-                df.groupby(x_column)[y_column]
-                .mean()
-            )
-
-        elif aggregation == "sum":
-
-            grouped = (
-                df.groupby(x_column)[y_column]
-                .sum()
-            )
-
-        elif aggregation == "median":
-
-            grouped = (
-                df.groupby(x_column)[y_column]
-                .median()
-            )
-
-        else:
-
-            grouped = (
-                df.groupby(x_column)[y_column]
-                .mean()
-            )
-
-        grouped = grouped.sort_values(ascending=False).head(10)    
-        plt.figure(figsize=(10,6))
-        ax = grouped.plot(kind="bar")
-        grouped.plot(kind="bar")
-        plt.title(
-            f"{aggregation} de {y_column} por {x_column}", fontweight="bold"
+        grouped = (
+            df.groupby(x_column)[y_column]
+            .agg(aggregation)
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
         )
-        plt.ylabel(y_column)
+
+        plt.figure(figsize=(12, 6))
+
+        ax = sns.barplot(
+            data=grouped,
+            x=x_column,
+            y=y_column
+        )
+
+        plt.title(
+            title or f"{aggregation} de {y_column} por {x_column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
         plt.xlabel(x_column)
-        plt.xticks(rotation=45, ha="right")
-        plt.grid(axis='y',alpha=0.3)
+        plt.ylabel(y_column)
 
-        for i, value in enumerate(grouped):
-
-            ax.text(
-                i,
-                value,
-                f"{value:,.0f}",
-                ha='center',
-                va='bottom',
-                fontsize=10
-            )
+        plt.xticks(
+            rotation=45,
+            ha="right"
+        )
 
         ax.yaxis.set_major_formatter(
-            plt.FuncFormatter(
-                lambda y, _: f"{y:,.0f}"
+            ChartService.thousands_formatter()
+        )
+
+        for container in ax.containers:
+
+            ax.bar_label(
+                container,
+                fmt='%.0f',
+                padding=3
             )
+
+        return ChartService.save_chart()
+
+
+    # ==========================================
+    # SCATTERPLOT
+    # ==========================================
+
+    @staticmethod
+    def generate_scatterplot(
+        df,
+        x_column,
+        y_column,
+        title=None
+    ):
+
+        clean_df = (
+            df[[x_column, y_column]]
+            .dropna()
+        )
+
+        plt.figure(figsize=(10, 6))
+
+        ax = sns.scatterplot(
+            data=clean_df,
+            x=x_column,
+            y=y_column
+        )
+
+        plt.title(
+            title or f"{x_column} vs {y_column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        plt.xlabel(x_column)
+        plt.ylabel(y_column)
+
+        return ChartService.save_chart()
+
+
+    # ==========================================
+    # LINEPLOT
+    # ==========================================
+
+    @staticmethod
+    def generate_lineplot(
+        df,
+        x_column,
+        y_column,
+        title=None
+    ):
+
+        clean_df = (
+            df[[x_column, y_column]]
+            .dropna()
+            .sort_values(by=x_column)
+        )
+
+        plt.figure(figsize=(11, 6))
+
+        ax = sns.lineplot(
+            data=clean_df,
+            x=x_column,
+            y=y_column,
+            marker="o"
+        )
+
+        plt.title(
+            title or f"{y_column} por {x_column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        plt.xlabel(x_column)
+        plt.ylabel(y_column)
+
+        ax.yaxis.set_major_formatter(
+            ChartService.thousands_formatter()
         )
 
         return ChartService.save_chart()
 
+
+    # ==========================================
+    # BOXPLOT
+    # ==========================================
+
     @staticmethod
-    def generate_charts_from_ai(df, ai_analysis):
+    def generate_boxplot(
+        df,
+        x_column,
+        y_column,
+        title=None
+    ):
+
+        clean_df = (
+            df[[x_column, y_column]]
+            .dropna()
+        )
+
+        plt.figure(figsize=(12, 6))
+
+        ax = sns.boxplot(
+            data=clean_df,
+            x=x_column,
+            y=y_column
+        )
+
+        plt.title(
+            title or f"{y_column} por {x_column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        plt.xlabel(x_column)
+        plt.ylabel(y_column)
+
+        plt.xticks(
+            rotation=45,
+            ha="right"
+        )
+
+        ax.yaxis.set_major_formatter(
+            ChartService.thousands_formatter()
+        )
+
+        return ChartService.save_chart()
+
+
+    # ==========================================
+    # VIOLINPLOT
+    # ==========================================
+
+    @staticmethod
+    def generate_violinplot(
+        df,
+        x_column,
+        y_column,
+        title=None
+    ):
+
+        clean_df = (
+            df[[x_column, y_column]]
+            .dropna()
+        )
+
+        plt.figure(figsize=(12, 6))
+
+        ax = sns.violinplot(
+            data=clean_df,
+            x=x_column,
+            y=y_column
+        )
+
+        plt.title(
+            title or f"{y_column} por {x_column}",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        plt.xlabel(x_column)
+        plt.ylabel(y_column)
+
+        plt.xticks(
+            rotation=45,
+            ha="right"
+        )
+
+        return ChartService.save_chart()
+
+
+    # ==========================================
+    # HEATMAP
+    # ==========================================
+
+    @staticmethod
+    def generate_heatmap(
+        df,
+        title=None
+    ):
+
+        numeric_df = (
+            df.select_dtypes(
+                include=['number']
+            )
+        )
+
+        if numeric_df.shape[1] < 2:
+
+            return None
+
+        correlation = numeric_df.corr()
+
+        plt.figure(figsize=(10, 8))
+
+        sns.heatmap(
+            correlation,
+            annot=True,
+            fmt=".2f",
+            cmap="coolwarm"
+        )
+
+        plt.title(
+            title or "Mapa de correlación",
+            fontsize=16,
+            fontweight='bold'
+        )
+
+        return ChartService.save_chart()
+
+
+    # ==========================================
+    # MAIN AI CHART GENERATOR
+    # ==========================================
+
+    @staticmethod
+    def generate_charts_from_ai(
+        df,
+        ai_analysis
+    ):
 
         chart_paths = []
 
@@ -190,68 +473,145 @@ class ChartService:
 
                 if chart_type == "histogram":
 
-                    column = item["column"]
-
                     chart = (
                         ChartService
                         .generate_histogram(
                             df,
-                            column
+                            item["x"],
+                            item.get("title")
                         )
                     )
 
                     chart_paths.append(chart)
 
                 # ==================================
-                # CATEGORICAL FREQUENCY
+                # COUNTPLOT
                 # ==================================
 
-                elif (
-                    chart_type
-                    == "categorical_frequency"
-                ):
-
-                    column = item["column"]
+                elif chart_type == "countplot":
 
                     chart = (
                         ChartService
-                        .generate_bar_chart(
+                        .generate_countplot(
                             df,
-                            column
+                            item["x"],
+                            item.get("title")
                         )
                     )
 
                     chart_paths.append(chart)
 
                 # ==================================
-                # AGGREGATION BAR
+                # BARPLOT
                 # ==================================
 
-                elif (
-                    chart_type
-                    == "bar_aggregation"
-                ):
-
-                    x_column = item["x_column"]
-
-                    y_column = item["y_column"]
-
-                    aggregation = item.get(
-                        "aggregation",
-                        "mean"
-                    )
+                elif chart_type == "barplot":
 
                     chart = (
                         ChartService
-                        .generate_aggregation_bar_chart(
+                        .generate_barplot(
                             df,
-                            x_column,
-                            y_column,
-                            aggregation
+                            item["x"],
+                            item["y"],
+                            item.get(
+                                "aggregation",
+                                "mean"
+                            ),
+                            item.get("title")
                         )
                     )
 
                     chart_paths.append(chart)
+
+                # ==================================
+                # SCATTERPLOT
+                # ==================================
+
+                elif chart_type == "scatterplot":
+
+                    chart = (
+                        ChartService
+                        .generate_scatterplot(
+                            df,
+                            item["x"],
+                            item["y"],
+                            item.get("title")
+                        )
+                    )
+
+                    chart_paths.append(chart)
+
+                # ==================================
+                # LINEPLOT
+                # ==================================
+
+                elif chart_type == "lineplot":
+
+                    chart = (
+                        ChartService
+                        .generate_lineplot(
+                            df,
+                            item["x"],
+                            item["y"],
+                            item.get("title")
+                        )
+                    )
+
+                    chart_paths.append(chart)
+
+                # ==================================
+                # BOXPLOT
+                # ==================================
+
+                elif chart_type == "boxplot":
+
+                    chart = (
+                        ChartService
+                        .generate_boxplot(
+                            df,
+                            item["x"],
+                            item["y"],
+                            item.get("title")
+                        )
+                    )
+
+                    chart_paths.append(chart)
+
+                # ==================================
+                # VIOLINPLOT
+                # ==================================
+
+                elif chart_type == "violinplot":
+
+                    chart = (
+                        ChartService
+                        .generate_violinplot(
+                            df,
+                            item["x"],
+                            item["y"],
+                            item.get("title")
+                        )
+                    )
+
+                    chart_paths.append(chart)
+
+                # ==================================
+                # HEATMAP
+                # ==================================
+
+                elif chart_type == "heatmap":
+
+                    chart = (
+                        ChartService
+                        .generate_heatmap(
+                            df,
+                            item.get("title")
+                        )
+                    )
+
+                    if chart:
+
+                        chart_paths.append(chart)
 
                 else:
 
@@ -260,7 +620,7 @@ class ChartService:
                         f"{chart_type}"
                     )
 
-            except Exception as e:
+            except Exception:
 
                 import traceback
 

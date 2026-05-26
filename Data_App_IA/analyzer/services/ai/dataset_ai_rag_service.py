@@ -1,15 +1,17 @@
 import json
 import pandas as pd
-from google import genai
-from google.genai import types
+#from google import genai
+#from google.genai import types
 from django.conf import settings
+from openai import OpenAI
 
-
-client = genai.Client(
-    api_key=settings.GEMINI_API_KEY
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=settings.NVIDIA_API_KEY
 )
 
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "meta/llama-3.3-70b-instruct"
+#MODEL = "glm-5.1"
 
 class DatasetRAGService:
 
@@ -105,17 +107,21 @@ User question:
 """
         print(json.dumps(metadata, indent=2))
 
-        response = client.models.generate_content(
-
+        response = client.chat.completions.create(
             model=MODEL,
-            config=types.GenerateContentConfig(
-                temperature=0
-            ),
-            contents=prompt
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0
         )
 
+        text = response.choices[0].message.content
+
         clean_text = (
-            response.text
+            text
             .replace("```json", "")
             .replace("```", "")
             .strip()
@@ -156,7 +162,7 @@ User question:
                     df[col]
                     .dropna()
                     .astype(str)
-                    .head(10)
+                    .head(50)
                     .tolist()
                 )
             }
@@ -257,19 +263,21 @@ User question:
 {question}
 """
 
-        response = client.models.generate_content(
-
+        response = client.chat.completions.create(
             model=MODEL,
-
-            config=types.GenerateContentConfig(
-                temperature=0
-            ),
-
-            contents=prompt
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0
         )
 
+        text = response.choices[0].message.content
+
         code = (
-            response.text
+            text
             .replace("```python", "")
             .replace("```", "")
             .strip()
@@ -338,13 +346,13 @@ User question:
             result,
             pd.DataFrame
         ):
-            return result.head(20).to_string()
+            return result.head(50).to_string()
 
         elif isinstance(
             result,
             pd.Series
         ):
-            return result.head(20).to_string()
+            return result.head(50).to_string()
 
         else:
             return str(result)
@@ -386,15 +394,17 @@ Pandas result:
 {pandas_result}
 """
 
-        response = client.models.generate_content(
-
+        response = client.chat.completions.create(
             model=MODEL,
-            config=types.GenerateContentConfig(
-                temperature=0.3
-            ),
-            contents=prompt
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0
         )
-        return response.text
+        return response.choices[0].message.content
 
 
     # ==========================================
